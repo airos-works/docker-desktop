@@ -11,7 +11,7 @@ make -j8
 STAGE=$(mktemp -d /tmp/docker-desktop-package-XXXXXX)
 trap 'rm -rf -- "$STAGE"' EXIT
 DOCS="$STAGE/documentation/packages/dockerdesktop"
-mkdir -p "$STAGE/apps" "$DOCS" "$STAGE/data/deskbar/menu/Applications" \
+mkdir -p "$STAGE/apps" "$DOCS" "$STAGE/data/deskbar/menu/Developer" \
 	"$STAGE/data/licenses" "$ROOT/artifacts"
 cp build-haiku/DockerDesktop "$STAGE/apps/DockerDesktop"
 strip --strip-debug "$STAGE/apps/DockerDesktop"
@@ -20,6 +20,6 @@ xres -o "$STAGE/apps/DockerDesktop" build-haiku/docker-desktop.rsrc
 cp resources/docker-desktop.PackageInfo "$STAGE/.PackageInfo"
 cp README.md "$DOCS/"
 [ -f LICENSE ] && cp LICENSE "$DOCS/"
-ln -s ../../../../apps/DockerDesktop "$STAGE/data/deskbar/menu/Applications/DockerDesktop"
+ln -s ../../../../apps/DockerDesktop "$STAGE/data/deskbar/menu/Developer/DockerDesktop"
 package create -C "$STAGE" "$FILE"
 printf '%s\n' "$FILE"
