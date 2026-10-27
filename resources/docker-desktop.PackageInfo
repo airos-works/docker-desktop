@@ -1,0 +1,16 @@
+name dockerdesktop
+version 0.1.0~dev-1
+architecture x86_64
+summary "Docker Desktop-style manager for air/OS"
+description "A native air/OS GUI for Docker: browse containers and images, start, stop, restart and remove them, all talking to the Docker Engine API over the daemon's unix socket."
+packager "air/OS contributors"
+vendor "air/OS"
+copyrights { "2026 air/OS contributors" }
+licenses { "MIT" }
+provides {
+	dockerdesktop = 0.1.0~dev
+	app:DockerDesktop = 0.1.0~dev
+}
+requires {
+	haiku >= r1~beta5
+}
