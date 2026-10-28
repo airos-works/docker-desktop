@@ -12,7 +12,7 @@ jobs:
   airos:
     uses: jmgasper/airos-ci/.github/workflows/app.yml@main
     with:
-      app: docker-desktop
+      app: docker_desktop
       repo-dir: docker-desktop
     permissions:
       contents: write
