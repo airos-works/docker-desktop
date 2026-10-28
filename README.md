@@ -24,11 +24,12 @@ make            # build-haiku/DockerDesktop
 make package    # artifacts/dockerdesktop-<version>-<arch>.hpkg
 ```
 
-Cross, from Linux (x86_64, like airShot):
+Cross, from Linux (like airShot):
 
 ```sh
-tools/build-cross.sh            # build-cross/DockerDesktop
-tools/package-haiku-cross.sh    # artifacts/dockerdesktop-<version>-<arch>.hpkg
+tools/build-cross.sh            # build-cross/DockerDesktop (x86_64)
+tools/build-cross-arm64.sh      # build-cross-arm64/DockerDesktop (arm64)
+tools/package-haiku-cross.sh x86_64 arm64   # artifacts/dockerdesktop-<version>-<arch>.hpkg
 ```
 
 The hpkg drops the binary in `apps/` and a symlink in the Deskbar
