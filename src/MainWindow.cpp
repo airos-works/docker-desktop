@@ -19,7 +19,7 @@
 #include <thread>
 
 static const char* kDefaultSocket
-	= "/boot/system/cache/docker/docker.sock";
+	= "/var/run/docker.sock";
 
 namespace {
 
