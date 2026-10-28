@@ -1,3 +1,4 @@
 build-cross/
+build-cross-arm64/
 build-haiku/
 artifacts/
