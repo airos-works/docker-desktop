@@ -3,7 +3,8 @@
 #ifndef DOCKER_MAIN_WINDOW_H
 #define DOCKER_MAIN_WINDOW_H
 
-#include <List.h>
+#include "DockerClient.h"
+
 #include <Messenger.h>
 #include <String.h>
 #include <Window.h>
@@ -12,10 +13,19 @@
 
 class BButton;
 class BCheckBox;
-class BListView;
+class BFilePanel;
+class BMenuBar;
+class BMenuItem;
 class BMessageRunner;
 class BStringView;
 class BTabView;
+class ContainersView;
+class DiskUsageView;
+class EngineDot;
+class ImagesView;
+class NetworksView;
+class ResourceView;
+class VolumesView;
 
 class MainWindow : public BWindow {
 public:
@@ -24,45 +34,68 @@ public:
 
 	void MessageReceived(BMessage* message) override;
 	bool QuitRequested() override;
-
-	BMessenger& Self() { return fMessenger; }
+	void MenusBeginning() override;
 
 private:
-	void _RefreshLists();
-	void _HandleListResult(BMessage* message);
-	void _UpdateButtons();
-	int32 _SelectedContainerIndex();
-	int32 _SelectedImageIndex();
-	void _RunAction(const char* id, const char* action, bool isImage);
+	BMenuBar* _BuildMenuBar();
+	ResourceView* _ResourceView(int32 tab) const;
+	void _RefreshAll();
+	void _TabChanged();
+
 	void _PollEngine();
 	void _HandleEngineStatus(BMessage* message);
 	void _StartEngine();
+	void _StopEngine();
+	void _RestartEngine();
 	void _SetStartAtBoot(bool start);
 	void _UpdateEngineControls();
+	void _FetchVersion();
+	void _StartEvents();
+	void _StopEvents();
+	void _HandleEvent(BMessage* message);
+	void _SocketChanged();
+	void _UpdateCounts();
+
+	void _ShowEngineLog();
+	void _ShowAbout();
+	void _OpenPanel(uint32 purpose);
+	void _RefsReceived(BMessage* message);
 
 	BTabView* fTabs;
-	BListView* fContainers;
-	BListView* fImages;
-	BList* fContainerIds;
-	BList* fImageIds;
-	BButton* fStartButton;
-	BButton* fStopButton;
-	BButton* fRestartButton;
-	BButton* fRemoveButton;
-	BStringView* fStatus;
+	ContainersView* fContainersView;
+	ImagesView* fImagesView;
+	VolumesView* fVolumesView;
+	NetworksView* fNetworksView;
+	DiskUsageView* fDiskUsageView;
+
+	EngineDot* fEngineDot;
 	BStringView* fEngineState;
+	BStringView* fEngineVersion;
 	BButton* fEngineStartButton;
+	BButton* fEngineRestartButton;
 	BCheckBox* fStartAtBootCheck;
+	BMenuItem* fStartAtBootItem;
+	BMenuItem* fDeskbarItem;
+	BStringView* fStatus;
+	BStringView* fCounts;
+
 	BMessageRunner* fEnginePoller;
-	BMessenger fMessenger;
+	BFilePanel* fOpenPanel;
+	BFilePanel* fFolderPanel;
 	BString fSocketPath;
-	bool fBusy;
+	BString fVersion;
+	CancelerRef fEvents;
 	bool fPinging;
 	bool fEngineChecked;
 	bool fEngineRunning;
 	bool fEngineStarting;
+	bool fEngineStopping;
+	bool fRestartPending;
 	pid_t fEnginePid;
+	pid_t fStoppedPid;
 	BString fEngineError;
+	int32 fPollCount;
+	int32 fEventsGeneration;
 };
 
 #endif

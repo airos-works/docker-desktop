@@ -21,16 +21,18 @@ INCLUDES+=" -isystem $HAIKU_SRC/headers -isystem $HAIKU_SRC/headers/posix"
 for dir in "$HAIKU_SRC"/headers/os "$HAIKU_SRC"/headers/os/*/; do
 	[[ -d $dir ]] && INCLUDES+=" -isystem ${dir%/}"
 done
+INCLUDES+=" -isystem $HAIKU_SRC/headers/os/add-ons/graphics"
 INCLUDES+=" -isystem $HAIKU_SRC/headers/glibc"
 
 GLUE="$OBJECTS/system/glue"
 CRT="$HAIKU_BUILD/cross-tools-x86_64/lib/gcc/x86_64-unknown-haiku/13.3.0"
-LIBDIRS="-L$OBJECTS/kits -L$OBJECTS/kits/shared -L$OBJECTS/system/libroot -L$OBJECTS/system/libnetwork -L$RUNTIME/lib"
+LIBDIRS="-L$OBJECTS/kits -L$OBJECTS/kits/interface -L$OBJECTS/kits/tracker -L$OBJECTS/kits/shared -L$OBJECTS/system/libroot -L$OBJECTS/system/libnetwork -L$RUNTIME/lib"
 START="-nodefaultlibs -nostartfiles $GLUE/arch/x86_64/crti.o $CRT/crtbeginS.o $GLUE/start_dyn.o $GLUE/init_term_dyn.o"
 END="$CRT/crtendS.o $GLUE/arch/x86_64/crtn.o"
 CXXLIBS="$RUNTIME/lib/libstdc++.so.6 $RUNTIME/lib/libgcc_s.so.1 $CRT/libgcc.a"
 
 export CROSS_CPPFLAGS="$INCLUDES"
+export PRIVATE_HEADERS="$HAIKU_SRC/headers/private"
 export CXX="$CROSS-g++"
 export RC="$HOST_TOOLS/rc/rc"
 export XRES="$HOST_TOOLS/xres"

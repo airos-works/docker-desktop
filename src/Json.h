@@ -58,6 +58,24 @@ const Value* Get(const Value* object, const char* key);
 const Value* At(const Value* array, int32 index);
 int32 Length(const Value* array);
 
+// The string at index of an array, and all of an array's strings joined.
+const char* StringAt(const Value* array, int32 index,
+	const char* fallback = "");
+BString Join(const Value* array, const char* separator);
+
+// An object's members, in document order (NULL when empty or no object).
+const Object* Members(const Value* object);
+int32 CountKeys(const Value* object);
+
+// Serialising: a JSON string literal, and a whole value.
+BString Quote(const char* text);
+BString Stringify(const Value* value, bool pretty = false);
+// Re-indents a JSON document for reading (returns it as is if unparsable).
+BString Pretty(const char* json);
+
+// Whether text is valid JSON; outError says where it is not.
+bool Validate(const char* text, BString* outError = NULL);
+
 void FreeValue(Value* value);
 
 } // namespace djson

@@ -4,7 +4,10 @@
 .DEFAULT_GOAL := all
 CXX ?= g++
 BUILD ?= build-haiku
-CPPFLAGS += -Isrc $(CROSS_CPPFLAGS)
+# BColumnListView's headers are private ones of the Haiku SDK; "=" is the
+# compiler's sysroot (empty on Haiku itself, the SDK in cross builds).
+PRIVATE_HEADERS ?= =/boot/system/develop/headers/private
+CPPFLAGS += -Isrc $(CROSS_CPPFLAGS) -isystem $(PRIVATE_HEADERS)/interface
 CXXFLAGS ?= -O2 -g
 RC ?= rc
 XRES ?= xres
@@ -13,14 +16,16 @@ CXXFLAGS += -std=c++17 -Wall -Wextra -Wno-multichar -Wno-unused-parameter -Wno-s
 
 APP_SRC = $(wildcard src/*.cpp)
 APP_OBJ = $(APP_SRC:%.cpp=$(BUILD)/%.o)
-APP_LIBS = -lbe -lnetwork -lpthread
+# --export-dynamic: Deskbar loads the executable as an add-on for its
+# replicant (DeskbarView.cpp), and finds instantiate_deskbar_item in it.
+APP_LIBS = -lcolumnlistview -ltracker -lbe -lnetwork -lpthread
 
 .PHONY: all package clean check
 
 all: $(BUILD)/DockerDesktop
 
-$(BUILD)/DockerDesktop: $(APP_OBJ) resources/docker-desktop.rdef
-	$(CXX) $(APP_LDFLAGS) -o $@.new $(APP_OBJ) $(APP_LIBS) $(APP_LDEND)
+$(BUILD)/DockerDesktop: $(APP_OBJ) resources/docker-desktop.rdef resources/docker-desktop.hvif
+	$(CXX) $(APP_LDFLAGS) -Wl,--export-dynamic -o $@.new $(APP_OBJ) $(APP_LIBS) $(APP_LDEND)
 	$(RC) -o $(BUILD)/docker-desktop.rsrc resources/docker-desktop.rdef
 	$(XRES) -o $@.new $(BUILD)/docker-desktop.rsrc
 	$(MIMESET) -f $@.new

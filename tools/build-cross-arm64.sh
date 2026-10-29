@@ -26,6 +26,7 @@ INCLUDES+=" -isystem $HAIKU_DEVEL/develop/headers/os"
 for dir in "$HAIKU_DEVEL"/develop/headers/os/*/; do
 	[[ -d $dir ]] && INCLUDES+=" -isystem ${dir%/}"
 done
+INCLUDES+=" -isystem $HAIKU_DEVEL/develop/headers/os/add-ons/graphics"
 INCLUDES+=" -isystem $HAIKU_DEVEL/develop/headers/glibc"
 
 LIBDIRS="-L$HAIKU_RT/lib -L$RUNTIME/lib -L$HAIKU_DEVEL/develop/lib"
@@ -34,6 +35,7 @@ END="$CRT/crtendS.o $GLUE/arch/arm64/crtn.o"
 CXXLIBS="$RUNTIME/lib/libstdc++.so.6 $RUNTIME/lib/libgcc_s.so.1 $CRT/libgcc.a"
 
 export CROSS_CPPFLAGS="$INCLUDES"
+export PRIVATE_HEADERS="$HAIKU_DEVEL/develop/headers/private"
 export CXX="$CROSS-g++"
 export RC="$HOST_TOOLS/rc/rc"
 export XRES="$HOST_TOOLS/xres"

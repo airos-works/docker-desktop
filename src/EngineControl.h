@@ -24,6 +24,18 @@ status_t SetStartsAtBoot(bool start);
 status_t Start(pid_t* outPid, BString* outError);
 BString LogPath();
 
+// The running dockerd, from its pid file or else the team list; -1 if
+// there is none.
+pid_t RunningPid();
+// Whether the process still exists (a dockerd that was asked to stop can
+// take a while, and deletes the pid file when it is done).
+bool IsAlive(pid_t pid);
+// Asks the running dockerd to shut down (SIGTERM), as `kill` would.
+status_t Stop(BString* outError);
+
+// The daemon configuration file dockerd reads (/etc/docker/daemon.json).
+BString ConfigPath();
+
 } // namespace EngineControl
 
 #endif

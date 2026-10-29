@@ -2,7 +2,7 @@ name dockerdesktop
 version 0.1.0~dev-1
 architecture x86_64
 summary "Docker Desktop-style manager for air/OS"
-description "A native air/OS GUI for Docker: browse containers and images, start, stop, restart and remove them, all talking to the Docker Engine API over the daemon's unix socket."
+description "A native air/OS counterpart of Docker Desktop: manage containers (grouped by Compose project), images, volumes and networks; follow logs, inspect and open a shell in containers; pull, run and search Docker Hub; see and reclaim disk usage; start, stop and configure the Docker Engine, also from a Deskbar item. It talks to the Docker Engine API over the daemon's unix socket."
 packager "air/OS contributors"
 vendor "air/OS"
 copyrights { "2026 air/OS contributors" }

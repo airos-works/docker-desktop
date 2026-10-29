@@ -27,6 +27,10 @@ for arch in "${@:-x86_64}"; do
         "$STAGE/data/deskbar/menu/Developer" "$STAGE/data/licenses"
 
     cp "$dir/DockerDesktop" "$STAGE/apps/DockerDesktop"
+    # The icon, signature and version as attributes too (Tracker and the
+    # Deskbar read those), like CI's add_attributes.
+    "$(dirname "$PACKAGE_TOOL")/../resattr/resattr" -O \
+        -o "$STAGE/apps/DockerDesktop" "$dir/docker-desktop.rsrc"
     sed -e "s/^architecture x86_64/architecture $arch/" \
         -e "s/^version .*/version $VERSION-$BUILD/" \
         resources/docker-desktop.PackageInfo > "$STAGE/.PackageInfo"
