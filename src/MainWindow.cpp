@@ -3,14 +3,18 @@
 #include "MainWindow.h"
 
 #include "DockerClient.h"
+#include "EngineControl.h"
 #include "Json.h"
 #include "Messages.h"
 
+#include <Alert.h>
 #include <Application.h>
 #include <Box.h>
 #include <Button.h>
+#include <CheckBox.h>
 #include <LayoutBuilder.h>
 #include <ListView.h>
+#include <MessageRunner.h>
 #include <ScrollView.h>
 #include <StringItem.h>
 #include <StringView.h>
@@ -18,8 +22,14 @@
 
 #include <thread>
 
+#include <string.h>
+#include <sys/wait.h>
+
 static const char* kDefaultSocket
 	= "/var/run/docker.sock";
+
+// How often the Engine bar asks the Engine whether it is up.
+static const bigtime_t kEnginePollInterval = 2000000;
 
 namespace {
 
@@ -53,6 +63,15 @@ void ListTaskRun(ListTask* task)
 	delete task;
 }
 
+void PingTaskRun(BMessenger target, BString socketPath)
+{
+	DockerClient client(socketPath);
+	BString version;
+	BMessage message(M_ENGINE_STATUS);
+	message.AddBool("running", client.Ping(&version) == B_OK);
+	target.SendMessage(&message);
+}
+
 void ActionTaskRun(ActionTask* task)
 {
 	DockerClient client(task->socketPath);
@@ -77,7 +96,12 @@ MainWindow::MainWindow()
 		B_TITLED_WINDOW, B_AUTO_UPDATE_SIZE_LIMITS),
 	fMessenger(this),
 	fSocketPath(kDefaultSocket),
-	fBusy(false)
+	fBusy(false),
+	fPinging(false),
+	fEngineChecked(false),
+	fEngineRunning(false),
+	fEngineStarting(false),
+	fEnginePid(-1)
 {
 	fContainerIds = new BList(20);
 	fImageIds = new BList(20);
@@ -116,6 +140,31 @@ MainWindow::MainWindow()
 	fStatus = new BStringView("status", "Not connected");
 	fStatus->SetAlignment(B_ALIGN_LEFT);
 
+	// The Engine bar, above everything else: whether dockerd is up, a
+	// button to start it now and the switch for starting it at boot.
+	fEngineState = new BStringView("engineState", "Checking the Docker Engine…");
+	fEngineState->SetFont(be_bold_font);
+	fEngineState->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
+	fEngineStartButton = new BButton("engineStart", "Start Engine",
+		new BMessage(M_ENGINE_START));
+	fStartAtBootCheck = new BCheckBox("startAtBoot",
+		"Start the Docker Engine at boot",
+		new BMessage(M_ENGINE_START_AT_BOOT));
+	fStartAtBootCheck->SetValue(EngineControl::StartsAtBoot()
+		? B_CONTROL_ON : B_CONTROL_OFF);
+
+	BBox* engineBox = new BBox("engine");
+	engineBox->SetLabel("Docker Engine");
+	BView* engineGroup = BLayoutBuilder::Group<>(B_VERTICAL, 4)
+		.AddGroup(B_HORIZONTAL, 8)
+			.Add(fEngineState)
+			.Add(fEngineStartButton)
+		.End()
+		.Add(fStartAtBootCheck)
+		.SetInsets(8, 4, 8, 6)
+		.View();
+	engineBox->AddChild(engineGroup);
+
 	BBox* actionBar = new BBox("actions");
 	BLayoutBuilder::Group<>(actionBar, B_HORIZONTAL, 4)
 		.Add(fStartButton)
@@ -126,16 +175,25 @@ MainWindow::MainWindow()
 		.SetInsets(6, 4, 6, 4);
 
 	BLayoutBuilder::Group<>(this, B_VERTICAL, 6)
+		.Add(engineBox)
 		.Add(fTabs)
 		.Add(actionBar)
 		.Add(fStatus)
 		.SetInsets(8, 8, 8, 8);
 
 	_UpdateButtons();
+	fEngineStartButton->SetEnabled(false);
+		// until the first answer from the Engine
+
+	BMessage poll(M_ENGINE_POLL);
+	fEnginePoller = new BMessageRunner(fMessenger, &poll,
+		kEnginePollInterval);
+	PostMessage(M_ENGINE_POLL);
 }
 
 MainWindow::~MainWindow()
 {
+	delete fEnginePoller;
 	// Items and id strings are owned by the list views / lists.
 	for (int32 i = 0; i < fContainerIds->CountItems(); i++)
 		delete (BString*)fContainerIds->ItemAt(i);
@@ -260,9 +318,117 @@ void MainWindow::_RunAction(const char* id, const char* action, bool isImage)
 	_UpdateButtons();
 }
 
+void MainWindow::_PollEngine()
+{
+	// A dockerd this window started that has exited again
+	if (fEnginePid > 0) {
+		int status;
+		if (waitpid(fEnginePid, &status, WNOHANG) == fEnginePid) {
+			fEnginePid = -1;
+			if (fEngineStarting) {
+				fEngineStarting = false;
+				fEngineError.SetToFormat("dockerd stopped; see %s",
+					EngineControl::LogPath().String());
+				_UpdateEngineControls();
+			}
+		}
+	}
+
+	if (fPinging)
+		return;
+	fPinging = true;
+	std::thread(PingTaskRun, fMessenger, fSocketPath).detach();
+}
+
+void MainWindow::_HandleEngineStatus(BMessage* message)
+{
+	fPinging = false;
+	bool running = message->GetBool("running", false);
+	if (fEngineChecked && running == fEngineRunning)
+		return;
+
+	fEngineChecked = true;
+	fEngineRunning = running;
+	if (running) {
+		fEngineStarting = false;
+		fEngineError = "";
+		_RefreshLists();
+	} else
+		fStatus->SetText("Docker Engine is not running");
+	_UpdateEngineControls();
+}
+
+void MainWindow::_StartEngine()
+{
+	if (fEngineRunning || fEngineStarting)
+		return;
+
+	pid_t pid;
+	BString error;
+	if (EngineControl::Start(&pid, &error) != B_OK) {
+		fEngineError = error;
+		_UpdateEngineControls();
+		return;
+	}
+	fEnginePid = pid;
+	fEngineStarting = true;
+	fEngineError = "";
+	_UpdateEngineControls();
+}
+
+void MainWindow::_SetStartAtBoot(bool start)
+{
+	status_t status = EngineControl::SetStartsAtBoot(start);
+	if (status != B_OK) {
+		BString text;
+		text.SetToFormat("The setting could not be saved: %s",
+			strerror(status));
+		(new BAlert("Docker Desktop", text.String(), "OK", NULL, NULL,
+			B_WIDTH_AS_USUAL, B_STOP_ALERT))->Go(NULL);
+		fStartAtBootCheck->SetValue(start ? B_CONTROL_OFF : B_CONTROL_ON);
+		return;
+	}
+
+	// Turning it on means wanting the Engine: start it now, too.
+	if (start)
+		_StartEngine();
+}
+
+void MainWindow::_UpdateEngineControls()
+{
+	if (fEngineRunning)
+		fEngineState->SetText("Docker Engine is running");
+	else if (fEngineStarting)
+		fEngineState->SetText("Docker Engine is starting…");
+	else if (fEngineError.Length() > 0) {
+		BString text("Docker Engine is stopped: ");
+		text << fEngineError;
+		fEngineState->SetText(text.String());
+	} else
+		fEngineState->SetText("Docker Engine is stopped");
+
+	fEngineStartButton->SetEnabled(!fEngineRunning && !fEngineStarting);
+}
+
 void MainWindow::MessageReceived(BMessage* message)
 {
 	switch (message->what) {
+	case M_ENGINE_POLL:
+		_PollEngine();
+		break;
+
+	case M_ENGINE_STATUS:
+		_HandleEngineStatus(message);
+		break;
+
+	case M_ENGINE_START:
+		_StartEngine();
+		break;
+
+	case M_ENGINE_START_AT_BOOT:
+		_SetStartAtBoot(fStartAtBootCheck->Value() == B_CONTROL_ON);
+		break;
+
 	case M_REFRESH:
 		_RefreshLists();
 		break;
@@ -284,8 +450,8 @@ void MainWindow::MessageReceived(BMessage* message)
 			_HandleListResult(message);
 		else {
 			fBusy = false;
-			fStatus->SetText("Docker Engine is not reachable; is the "
-				"daemon running?");
+			fStatus->SetText(fEngineRunning ? "No response from Docker Engine"
+				: "Docker Engine is not running; start it above");
 			_UpdateButtons();
 		}
 		break;

@@ -20,6 +20,10 @@ enum {
 	M_DOCKER_LIST_RESULT = 'dlis',
 	M_CONNECTION_SETTINGS = 'cset',
 	M_SOCKET_PATH_CHANGED = 'spch',
+	M_ENGINE_POLL = 'epol',
+	M_ENGINE_STATUS = 'ests',
+	M_ENGINE_START = 'esta',
+	M_ENGINE_START_AT_BOOT = 'ebot',
 };
 
 #endif

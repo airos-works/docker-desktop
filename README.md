@@ -20,6 +20,13 @@ Install with `pkgman install <file>`, or copy the file into `/boot/system/packag
 
 ## Features (0.1)
 
+- **Docker Engine** bar at the top of the window: whether the Engine is
+  running (checked every 2 seconds), a **Start Engine** button, and a
+  **Start the Docker Engine at boot** check box. Ticking the check box also
+  starts the Engine right away; unticking it leaves a running Engine alone.
+  Start Engine runs `dockerd --userland-proxy=false` in a session of its own
+  (it keeps running after Docker Desktop quits), logging to
+  `/boot/system/var/log/dockerd.log`; the bar says when it exits again.
 - **Containers** tab: lists all containers (name, image, state) with
   Start, Stop, Restart and Remove actions.
 - **Images** tab: lists images with tags and size; Remove action.
@@ -54,10 +61,19 @@ Developer folder.
 - `src/MainWindow.*` — window, tabs, action bar, status line; owns the
   worker-thread plumbing
 - `src/DockerClient.*` — HTTP/1.1 over unix sockets (Engine API subset)
+- `src/EngineControl.*` — the start-at-boot setting and starting dockerd
 - `src/Json.*` — minimal JSON parser for Engine responses
 - `resources/` — rdef and PackageInfo
 
 ## Notes
+
+- Starting at boot: the `docker_engine` package (air/OS CI) has a
+  launch_daemon job, `data/user_launch/docker_engine`, that starts dockerd
+  in each user session when `~/config/settings/docker_engine` (a flattened
+  BMessage) holds `start_at_boot = true`. The check box writes that file.
+  The Engine cannot bind `/var/run/docker.sock` in a live "Try air/OS"
+  session, whose boot volume is read-only beneath a write overlay; it needs
+  an installed system.
 
 - The Engine daemon itself is being ported in
   [airos-works/moby](https://github.com/airos-works/moby); the CLI is in
