@@ -797,6 +797,8 @@ void SettingsWindow::_UpdateVMStatus()
 		BString text;
 		if (root == NULL)
 			text = "The VM's supervisor gave no status.";
+		else if (djson::GetBool(root, "booting"))
+			text = "Starting: the VM is booting.";
 		else if (!djson::GetBool(root, "running")) {
 			BString error(djson::GetString(root, "error", ""));
 			if (error.Length() > 0)
