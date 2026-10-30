@@ -13,13 +13,14 @@ trap 'rm -rf -- "$STAGE"' EXIT
 DOCS="$STAGE/documentation/packages/dockerdesktop"
 mkdir -p "$STAGE/apps" "$DOCS" "$STAGE/data/deskbar/menu/Developer" \
 	"$STAGE/data/licenses" "$ROOT/artifacts"
-cp build-haiku/DockerDesktop "$STAGE/apps/DockerDesktop"
-strip --strip-debug "$STAGE/apps/DockerDesktop"
+# Installed as "Docker Desktop": the Deskbar names a running app by its file.
+cp build-haiku/DockerDesktop "$STAGE/apps/Docker Desktop"
+strip --strip-debug "$STAGE/apps/Docker Desktop"
 # GNU strip removes the appended Haiku resources; restore them.
-xres -o "$STAGE/apps/DockerDesktop" build-haiku/docker-desktop.rsrc
+xres -o "$STAGE/apps/Docker Desktop" build-haiku/docker-desktop.rsrc
 cp resources/docker-desktop.PackageInfo "$STAGE/.PackageInfo"
 cp README.md "$DOCS/"
 [ -f LICENSE ] && cp LICENSE "$DOCS/"
-ln -s ../../../../apps/DockerDesktop "$STAGE/data/deskbar/menu/Developer/DockerDesktop"
+ln -s "../../../../apps/Docker Desktop" "$STAGE/data/deskbar/menu/Developer/Docker Desktop"
 package create -C "$STAGE" "$FILE"
 printf '%s\n' "$FILE"

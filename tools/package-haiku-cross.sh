@@ -26,18 +26,19 @@ for arch in "${@:-x86_64}"; do
         "$STAGE/documentation/packages/dockerdesktop" \
         "$STAGE/data/deskbar/menu/Developer" "$STAGE/data/licenses"
 
-    cp "$dir/DockerDesktop" "$STAGE/apps/DockerDesktop"
+    # Installed as "Docker Desktop": the Deskbar names a running app by its file.
+    cp "$dir/DockerDesktop" "$STAGE/apps/Docker Desktop"
     # The icon, signature and version as attributes too (Tracker and the
     # Deskbar read those), like CI's add_attributes.
     "$(dirname "$PACKAGE_TOOL")/../resattr/resattr" -O \
-        -o "$STAGE/apps/DockerDesktop" "$dir/docker-desktop.rsrc"
+        -o "$STAGE/apps/Docker Desktop" "$dir/docker-desktop.rsrc"
     sed -e "s/^architecture x86_64/architecture $arch/" \
         -e "s/^version .*/version $VERSION-$BUILD/" \
         resources/docker-desktop.PackageInfo > "$STAGE/.PackageInfo"
     cp README.md "$STAGE/documentation/packages/dockerdesktop/"
     [ -f LICENSE ] && cp LICENSE "$STAGE/documentation/packages/dockerdesktop/"
-    ln -s ../../../../apps/DockerDesktop \
-        "$STAGE/data/deskbar/menu/Developer/DockerDesktop"
+    ln -s "../../../../apps/Docker Desktop" \
+        "$STAGE/data/deskbar/menu/Developer/Docker Desktop"
 
     out="$ROOT/artifacts/dockerdesktop-${VERSION}-${BUILD}-${arch}.hpkg"
     "$PACKAGE_TOOL" create -C "$STAGE" "$out"
