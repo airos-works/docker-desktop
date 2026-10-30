@@ -80,6 +80,13 @@ day to day, on the air/OS Engine:
 
 ### On the air/OS Engine
 
+Containers from Linux images run in air/OS's Linux VM (the linuxvm package:
+QEMU with NVMM, started on demand for the first one), with Linux's
+namespaces, cgroups and networks: they appear in the Containers tab like any
+other, with their logs, stats, processes (Top), terminals and published
+ports. Haiku images still run natively. The VM's memory and processors are
+set in `~/config/settings/docker_linuxvm` (`memory 4096`, `cpus 4`).
+
 Engine builds from 2026-10-30 on (airos-works/moby and
 airos-works/containerd) pull linux images when no haiku one exists, give
 `docker run -t` and `docker exec -t` a terminal, report container CPU,
