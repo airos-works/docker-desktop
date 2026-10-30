@@ -8,6 +8,7 @@
 #include "Json.h"
 #include "Messages.h"
 #include "Settings.h"
+#include "TextWindow.h"
 #include "Util.h"
 
 #include <Autolock.h>
@@ -26,8 +27,13 @@
 #include <TextControl.h>
 #include <TextView.h>
 
+#include <errno.h>
 #include <math.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <time.h>
+#include <unistd.h>
 
 namespace {
 
@@ -53,7 +59,67 @@ enum {
 	kActivate = 'swat',
 	kShowInDeskbar = 'swdb',
 	kDeskbarChanged = 'swdc',
+	kVMRefresh = 'swvr',
+	kVMStatus = 'swvs',
+	kVMSave = 'swvv',
+	kVMStop = 'swvp',
+	kVMStopped = 'swvd',
+	kVMLog = 'swvl',
 };
+
+// The Linux VM that runs containers from Linux images: containerd's
+// containerd-linuxvm answers on this socket, and the linuxvm package
+// installs the VM.
+const char* kLinuxVMSocket = "/var/run/containerd-linuxvm.sock";
+const char* kLinuxVMConsole = "/var/run/containerd-linuxvm/console.log";
+
+
+bool LinuxVMInstalled()
+{
+	return BEntry("/boot/system/data/linuxvm/vmlinuz").Exists()
+		|| BEntry("/boot/system/non-packaged/data/linuxvm/vmlinuz").Exists();
+}
+
+
+BString LinuxVMSettingsPath()
+{
+	BPath path;
+	if (find_directory(B_USER_SETTINGS_DIRECTORY, &path) != B_OK)
+		return "/boot/home/config/settings/docker_linuxvm";
+	path.Append("docker_linuxvm");
+	return path.Path();
+}
+
+
+// Sends one request line to containerd-linuxvm and reads its whole answer.
+// Blocks: call it on a worker thread.
+status_t LinuxVMRequest(const char* request, BString& reply)
+{
+	int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+	if (fd < 0)
+		return errno;
+	sockaddr_un address = {};
+	address.sun_family = AF_UNIX;
+	strlcpy(address.sun_path, kLinuxVMSocket, sizeof(address.sun_path));
+	if (connect(fd, (sockaddr*)&address, sizeof(address)) != 0) {
+		status_t status = errno;
+		close(fd);
+		return status;
+	}
+	BString line(request);
+	line << "\n";
+	if (write(fd, line.String(), line.Length()) != line.Length()) {
+		status_t status = errno;
+		close(fd);
+		return status;
+	}
+	char buffer[4096];
+	ssize_t bytes;
+	while ((bytes = read(fd, buffer, sizeof(buffer))) > 0)
+		reply.Append(buffer, bytes);
+	close(fd);
+	return B_OK;
+}
 
 BLocker sLock("settings window");
 BMessenger sWindow;
@@ -206,6 +272,55 @@ SettingsWindow::SettingsWindow(BWindow* mainWindow)
 		.View();
 	engine->SetName("Docker Engine");
 
+	// Linux VM
+	fVMStatus = new BStringView("vmStatus", "");
+	Util::MakeElastic(fVMStatus);
+	fVMMemory = new BTextControl("vmMemory", "Memory (MiB):", "", NULL);
+	fVMMemory->SetToolTip("Empty: a quarter of this computer's memory, "
+		"between 1 and 8 GiB");
+	fVMCpus = new BTextControl("vmCpus", "Processors:", "", NULL);
+	fVMCpus->SetToolTip("Empty: half of this computer's processors, at "
+		"most 8");
+	fVMSettingsStatus = new BStringView("vmSettingsStatus", "");
+	Util::MakeElastic(fVMSettingsStatus);
+	fVMStopButton = new BButton("vmStop", "Stop the Linux VM",
+		new BMessage(kVMStop));
+	BBox* vmBox = new BBox("vmResources");
+	vmBox->SetLabel("Resources");
+	BLayoutBuilder::Group<>(vmBox, B_VERTICAL, B_USE_SMALL_SPACING)
+		.AddGrid(B_USE_SMALL_SPACING, B_USE_SMALL_SPACING)
+			.AddTextControl(fVMMemory, 0, 0)
+			.AddTextControl(fVMCpus, 0, 1)
+		.End()
+		.Add(Note("They apply when the VM starts next: stop it to apply them "
+			"now."))
+		.AddGroup(B_HORIZONTAL, B_USE_SMALL_SPACING)
+			.Add(fVMSettingsStatus)
+			.Add(new BButton("vmSave", "Save", new BMessage(kVMSave)))
+		.End()
+		.SetInsets(B_USE_DEFAULT_SPACING, B_USE_BIG_SPACING,
+			B_USE_DEFAULT_SPACING, B_USE_DEFAULT_SPACING);
+	BView* linuxVM = BLayoutBuilder::Group<>(B_VERTICAL, B_USE_DEFAULT_SPACING)
+		.Add(Note("Containers from Linux images run in a small Linux virtual "
+			"machine, with Linux's namespaces, cgroups and networks; it starts "
+			"with the first of them. Containers from Haiku images run "
+			"natively.", 3))
+		.AddGroup(B_HORIZONTAL, B_USE_SMALL_SPACING)
+			.Add(fVMStatus)
+			.Add(new BButton("vmRefresh", "Refresh", new BMessage(kVMRefresh)))
+		.End()
+		.Add(vmBox)
+		.AddGroup(B_HORIZONTAL, B_USE_SMALL_SPACING)
+			.Add(fVMStopButton)
+			.Add(new BButton("vmLog", "Show VM console", new BMessage(kVMLog)))
+			.AddGlue()
+		.End()
+		.Add(Note("Stopping the VM stops every container from a Linux image."))
+		.AddGlue()
+		.SetInsets(B_USE_WINDOW_SPACING)
+		.View();
+	linuxVM->SetName("Linux VM");
+
 	// Troubleshoot
 	fTroubleStatus = new BStringView("troubleStatus", "");
 	Util::MakeElastic(fTroubleStatus);
@@ -250,6 +365,7 @@ SettingsWindow::SettingsWindow(BWindow* mainWindow)
 	fTabs = new BTabView("tabs", B_WIDTH_FROM_LABEL);
 	fTabs->AddTab(general);
 	fTabs->AddTab(engine);
+	fTabs->AddTab(linuxVM);
 	fTabs->AddTab(troubleshoot);
 	fTabs->SetBorder(B_NO_BORDER);
 	BLayoutBuilder::Group<>(this, B_VERTICAL, 0)
@@ -257,6 +373,8 @@ SettingsWindow::SettingsWindow(BWindow* mainWindow)
 
 	_LoadDaemonConfig();
 	_UpdateAccounts();
+	_LoadVMSettings();
+	_UpdateVMStatus();
 	Util::CenterOver(this, mainWindow);
 }
 
@@ -510,6 +628,39 @@ void SettingsWindow::MessageReceived(BMessage* message)
 		fMainWindow.SendMessage(M_SHOW_ENGINE_LOG);
 		break;
 
+	case kVMRefresh:
+		_UpdateVMStatus();
+		break;
+
+	case kVMStatus:
+		fVMStatus->SetText(message->GetString("status", ""));
+		fVMStopButton->SetEnabled(message->GetBool("running", false));
+		break;
+
+	case kVMSave:
+		_SaveVMSettings();
+		break;
+
+	case kVMStop:
+		if (!Util::Confirm("Stop the Linux VM? Every container from a Linux "
+				"image stops with it.", "Stop"))
+			break;
+		fVMStopButton->SetEnabled(false);
+		fVMStatus->SetText("Stopping the Linux VM…");
+		Util::RunTask(BMessenger(this), kVMStopped, [](BMessage& reply) {
+			BString answer;
+			LinuxVMRequest("stop", answer);
+		});
+		break;
+
+	case kVMStopped:
+		_UpdateVMStatus();
+		break;
+
+	case kVMLog:
+		_ShowVMLog();
+		break;
+
 	case kPurge:
 		_Purge();
 		break;
@@ -557,4 +708,135 @@ void SettingsWindow::MessageReceived(BMessage* message)
 		BWindow::MessageReceived(message);
 		break;
 	}
+}
+
+
+void SettingsWindow::_LoadVMSettings()
+{
+	BFile file(LinuxVMSettingsPath().String(), B_READ_ONLY);
+	off_t size = 0;
+	if (file.InitCheck() != B_OK || file.GetSize(&size) != B_OK)
+		return;
+	BString text;
+	char* buffer = text.LockBuffer(size + 1);
+	ssize_t read = file.Read(buffer, size);
+	text.UnlockBuffer(read > 0 ? read : 0);
+	int32 start = 0;
+	while (start < text.Length()) {
+		int32 end = text.FindFirst('\n', start);
+		if (end < 0)
+			end = text.Length();
+		BString line;
+		text.CopyInto(line, start, end - start);
+		start = end + 1;
+		line.Trim();
+		int32 space = line.FindFirst(' ');
+		if (space < 0)
+			continue;
+		BString key, value;
+		line.CopyInto(key, 0, space);
+		line.CopyInto(value, space + 1, line.Length() - space - 1);
+		value.Trim();
+		if (key == "memory")
+			fVMMemory->SetText(value.String());
+		else if (key == "cpus")
+			fVMCpus->SetText(value.String());
+	}
+}
+
+
+void SettingsWindow::_SaveVMSettings()
+{
+	BString memory(fVMMemory->Text()), cpus(fVMCpus->Text());
+	memory.Trim();
+	cpus.Trim();
+	if ((memory.Length() > 0 && (atoi(memory.String()) < 256
+			|| atoi(memory.String()) > 262144))
+		|| (cpus.Length() > 0 && (atoi(cpus.String()) < 1
+			|| atoi(cpus.String()) > 64))) {
+		fVMSettingsStatus->SetText("Memory is 256 MiB or more, processors "
+			"1 to 64 (or empty for the defaults).");
+		return;
+	}
+	BString text("# Docker Desktop: the Linux VM's resources\n");
+	if (memory.Length() > 0)
+		text << "memory " << atoi(memory.String()) << "\n";
+	if (cpus.Length() > 0)
+		text << "cpus " << atoi(cpus.String()) << "\n";
+	BPath path(LinuxVMSettingsPath().String());
+	BPath parent;
+	path.GetParent(&parent);
+	create_directory(parent.Path(), 0755);
+	BFile file(path.Path(), B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
+	if (file.InitCheck() != B_OK
+		|| file.Write(text.String(), text.Length()) != text.Length()) {
+		fVMSettingsStatus->SetText("They could not be saved.");
+		return;
+	}
+	fVMSettingsStatus->SetText("Saved.");
+}
+
+
+void SettingsWindow::_UpdateVMStatus()
+{
+	if (!LinuxVMInstalled()) {
+		fVMStatus->SetText("Not installed (the linuxvm package): containers "
+			"from Linux images cannot run.");
+		fVMStopButton->SetEnabled(false);
+		return;
+	}
+	fVMStatus->SetText("Asking the Linux VM…");
+	Util::RunTask(BMessenger(this), kVMStatus, [](BMessage& reply) {
+		BString json;
+		if (LinuxVMRequest("status", json) != B_OK) {
+			reply.AddString("status", "Stopped: it starts with the first "
+				"container from a Linux image.");
+			return;
+		}
+		djson::Value* root = djson::Parse(json.String());
+		BString text;
+		if (root == NULL)
+			text = "The VM's supervisor gave no status.";
+		else if (!djson::GetBool(root, "running")) {
+			BString error(djson::GetString(root, "error", ""));
+			if (error.Length() > 0)
+				text << "Stopped; it last failed to start: " << error;
+			else
+				text = "Stopped: it starts with the first container from a "
+					"Linux image.";
+		} else {
+			const djson::Value* info = djson::Get(root, "info");
+			BString accel(djson::GetString(root, "accel", ""));
+			accel.ToUpper();
+			text.SetToFormat("Running: Linux %s, %d processors, %d MiB, %s",
+				info != NULL ? djson::GetString(info, "kernel", "") : "",
+				(int)djson::GetNumber(root, "cpus"),
+				(int)djson::GetNumber(root, "memoryMB"), accel.String());
+			reply.AddBool("running", true);
+		}
+		djson::FreeValue(root);
+		reply.AddString("status", text);
+	});
+}
+
+
+void SettingsWindow::_ShowVMLog()
+{
+	TextWindow* window = new TextWindow("Linux VM console", this);
+	window->SetLoader([](BString& text, BString& error) {
+		BFile file(kLinuxVMConsole, B_READ_ONLY);
+		status_t status = file.InitCheck();
+		if (status != B_OK) {
+			error.SetToFormat("%s: %s", kLinuxVMConsole, strerror(status));
+			return status;
+		}
+		off_t size = 0;
+		file.GetSize(&size);
+		off_t start = size > 512 * 1024 ? size - 512 * 1024 : 0;
+		char* buffer = text.LockBuffer(size - start + 1);
+		ssize_t read = file.ReadAt(start, buffer, size - start);
+		text.UnlockBuffer(read > 0 ? read : 0);
+		return B_OK;
+	}, 2000000);
+	window->Show();
 }

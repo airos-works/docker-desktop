@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Settings: Docker Desktop's own, the Engine's daemon.json, Docker Hub
-// sign-in, and the troubleshooting tools.
+// sign-in, the Linux VM, and the troubleshooting tools.
 
 #ifndef DOCKER_SETTINGS_WINDOW_H
 #define DOCKER_SETTINGS_WINDOW_H
@@ -20,6 +20,7 @@ public:
 	enum {
 		kGeneralTab = 0,
 		kEngineTab,
+		kLinuxVMTab,
 		kTroubleshootTab,
 	};
 
@@ -41,6 +42,10 @@ private:
 	void _SaveDaemonConfig(bool restart);
 	void _UpdateAccounts();
 	void _Purge();
+	void _LoadVMSettings();
+	void _SaveVMSettings();
+	void _UpdateVMStatus();
+	void _ShowVMLog();
 
 	BMessenger fMainWindow;
 	BTabView* fTabs;
@@ -52,6 +57,11 @@ private:
 	BStringView* fAccounts;
 	BTextView* fDaemonConfig;
 	BStringView* fDaemonStatus;
+	BStringView* fVMStatus;
+	BTextControl* fVMMemory;
+	BTextControl* fVMCpus;
+	BStringView* fVMSettingsStatus;
+	BButton* fVMStopButton;
 	BStringView* fTroubleStatus;
 	BButton* fPurgeButton;
 };
