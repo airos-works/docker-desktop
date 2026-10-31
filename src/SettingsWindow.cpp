@@ -127,7 +127,7 @@ BMessenger sWindow;
 const char* kDefaultDaemonConfig = "{\n}\n";
 
 // A wrapped, read-only text of at most lines lines.
-BView* Note(const char* text, int lines = 2)
+BView* Note(const char* text, int lines = 2, const BFont* font = be_plain_font)
 {
 	BTextView* view = new BTextView("note");
 	view->SetText(text);
@@ -137,15 +137,23 @@ BView* Note(const char* text, int lines = 2)
 	view->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
 	view->SetLowUIColor(B_PANEL_BACKGROUND_COLOR);
 	rgb_color color = ui_color(B_PANEL_TEXT_COLOR);
-	view->SetFontAndColor(be_plain_font, B_FONT_ALL, &color);
+	view->SetFontAndColor(font, B_FONT_ALL, &color);
 	font_height height;
-	be_plain_font->GetHeight(&height);
+	font->GetHeight(&height);
 	float lineHeight = ceilf(height.ascent + height.descent + height.leading);
 	view->SetExplicitMinSize(BSize(300, lineHeight * lines));
 	view->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED,
 		lineHeight * lines + 4));
 	return view;
 }
+
+#if defined(__aarch64__)
+// A note the user should not miss.
+BView* Warning(const char* text, int lines)
+{
+	return Note(text, lines, be_bold_font);
+}
+#endif
 
 } // namespace
 
@@ -305,6 +313,13 @@ SettingsWindow::SettingsWindow(BWindow* mainWindow)
 			"machine, with Linux's namespaces, cgroups and networks; it starts "
 			"with the first of them. Containers from Haiku images run "
 			"natively.", 3))
+#if defined(__aarch64__)
+		// air/OS has no hypervisor on ARM: QEMU emulates the VM's processor
+		.Add(Warning("On ARM the Linux VM is emulated, so it is slow: it takes "
+			"a while to start, and code in containers from Linux images runs "
+			"dozens of times slower than on this computer. Use it to try an "
+			"image or run a small service, not for builds or heavy work.", 4))
+#endif
 		.AddGroup(B_HORIZONTAL, B_USE_SMALL_SPACING)
 			.Add(fVMStatus)
 			.Add(new BButton("vmRefresh", "Refresh", new BMessage(kVMRefresh)))
@@ -809,7 +824,10 @@ void SettingsWindow::_UpdateVMStatus()
 		} else {
 			const djson::Value* info = djson::Get(root, "info");
 			BString accel(djson::GetString(root, "accel", ""));
-			accel.ToUpper();
+			if (accel == "tcg")
+				accel = "emulated (TCG): slow";
+			else
+				accel.ToUpper();
 			text.SetToFormat("Running: Linux %s, %d processors, %d MiB, %s",
 				info != NULL ? djson::GetString(info, "kernel", "") : "",
 				(int)djson::GetNumber(root, "cpus"),
