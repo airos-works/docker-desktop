@@ -8,14 +8,14 @@ Docker Engine API over the daemon's unix socket — no Electron, no Qt.
 <!-- airos-ci:latest-builds:start -->
 ## Latest builds
 
-Built automatically by air/OS CI from commit `9c04478` on 2026-10-30 ([all files](https://github.com/airos-works/docker-desktop/releases/tag/latest)).
+Built automatically by air/OS CI from commit `573d937` on 2026-10-31 ([all files](https://github.com/airos-works/docker-desktop/releases/tag/latest)).
 
 | Architecture | Package |
 |---|---|
-| arm64 | [dockerdesktop-0.1.0.dev.21.9c04478-1-arm64.hpkg](https://github.com/airos-works/docker-desktop/releases/download/latest/dockerdesktop-0.1.0.dev.21.9c04478-1-arm64.hpkg) |
-| x86_64 | [dockerdesktop-0.1.0.dev.21.9c04478-1-x86_64.hpkg](https://github.com/airos-works/docker-desktop/releases/download/latest/dockerdesktop-0.1.0.dev.21.9c04478-1-x86_64.hpkg) |
+| arm64 | [dockerdesktop-0.1.0.dev.23.573d937-1-arm64.hpkg](https://github.com/airos-works/docker-desktop/releases/download/latest/dockerdesktop-0.1.0.dev.23.573d937-1-arm64.hpkg) |
+| x86_64 | [dockerdesktop-0.1.0.dev.23.573d937-1-x86_64.hpkg](https://github.com/airos-works/docker-desktop/releases/download/latest/dockerdesktop-0.1.0.dev.23.573d937-1-x86_64.hpkg) |
 
-Install with `pkgman install <file>`, or copy the file into `/boot/system/packages`. Haiku SDK: x86_64 hrev60207-2133-gf63cb5a774, arm64 hrev60207-2135-ge27d19d6b8.
+Install with `pkgman install <file>`, or copy the file into `/boot/system/packages`. Haiku SDK: x86_64 hrev60207-2157-g53b5927da3, arm64 hrev60207-2157-g53b5927da3.
 <!-- airos-ci:latest-builds:end -->
 
 ## Features
